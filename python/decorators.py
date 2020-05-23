@@ -1,15 +1,7 @@
 import functools
-from typing import Any, Callable, Optional, Type, TypeVar
-
-T = TypeVar("T")
-E = TypeVar("E", bound=Exception)
-E1 = TypeVar("E1", bound=Exception)
-E2 = TypeVar("E2", bound=Exception)
 
 
-def ignores(
-    exc_type: Type[E], returns: T, when: Optional[Callable[[E], bool]] = None
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def ignores(exc_type, returns, when=None):
     """Ignores exception thrown by decorated function.
 
     When the specified exception is raised by the decorated function,
@@ -27,11 +19,42 @@ def ignores(
     when : callable, optional
         A predicate that can be used to further refine
         the exceptions to be ignored.
+
+    Examples
+    --------
+
+    Ignore all `ValueError`s:
+
+    >>> @ignores(ValueError, returns=1)
+    ... def foo(e):
+    ...     raise e
+
+    >>> foo(ValueError)
+    1
+
+    >>> foo(TypeError)
+    Traceback (most recent call last):
+        ...
+    TypeError
+
+    Ignore `ValueError`s with a specific message:
+
+    >>> @ignores(ValueError, returns=1, when=lambda e: str(e) == "Not so bad.")
+    ... def bar(e):
+    ...     raise e
+
+    >>> bar(ValueError("Bad!"))
+    Traceback (most recent call last):
+        ...
+    ValueError: Bad!
+
+    >>> bar(ValueError("Not so bad."))
+    1
     """
 
-    def decorator(f: Callable[..., T]) -> Callable[..., T]:
+    def decorator(f):
         @functools.wraps(f)
-        def wrapper(*args: Any, **kwargs: Any) -> T:
+        def wrapper(*args, **kwargs):
             try:
                 return f(*args, **kwargs)
             except exc_type as e:
@@ -39,19 +62,14 @@ def ignores(
                     pass
                 else:
                     raise e
-            return returns
+                return returns
 
         return wrapper
 
     return decorator
 
 
-def reraises(
-    from_exc: Type[E1],
-    to_exc: Type[E2],
-    when: Optional[Callable[[E1], bool]] = None,
-    make_message: Optional[Callable[[str], str]] = None,
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def reraises(from_exc, to_exc, when=None, make_message=None):
     """Reraises exception thrown by decorated function.
 
     This decorator catches the specified exception 'from_exc' in the decorated function
@@ -73,11 +91,36 @@ def reraises(
         the exceptions to be reraised.
     make_message : callable, optional
         Modify the original exception message.
+
+    Examples
+    --------
+
+    Reraise ValueError as TypeError with a new message:
+
+    >>> @reraises(
+    ...     from_exc=ValueError,
+    ...     to_exc=TypeError,
+    ...     make_message=lambda m: m + " (I used to be a ValueError)"
+    ... )
+    ... def foo(e):
+    ...     raise(e)
+
+    >>> foo(ValueError("Error!"))
+    Traceback (most recent call last):
+        ...
+    TypeError: Error! (I used to be a ValueError)
+
+    Other exceptions are unaffected!
+
+    >>> foo(RuntimeError("Error!"))
+    Traceback (most recent call last):
+        ...
+    RuntimeError: Error!
     """
 
-    def decorator(f: Callable[..., T]) -> Callable[..., T]:
+    def decorator(f):
         @functools.wraps(f)
-        def wrapper(*args: Any, **kwargs: Any) -> T:
+        def wrapper(*args, **kwargs):
             try:
                 return f(*args, **kwargs)
             except from_exc as e:
